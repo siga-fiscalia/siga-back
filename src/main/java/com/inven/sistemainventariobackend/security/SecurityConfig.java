@@ -12,7 +12,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -21,7 +20,7 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
-public class SecurityConfig implements WebMvcConfigurer {
+public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AuthenticationProvider authProvider;
@@ -30,24 +29,49 @@ public class SecurityConfig implements WebMvcConfigurer {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.cors(cors -> cors.configurationSource(request -> {
             CorsConfiguration configuration = new CorsConfiguration();
-            configuration.setAllowedOrigins(List.of("http://localhost:4200")); // Define los orígenes permitidos
-            configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-            configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
-            configuration.setAllowCredentials(true); // Permite credenciales si es necesario
+            configuration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:3000")); // Agregué puerto 3000 por si usas React
+            configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+            configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type", "X-Requested-With"));
+            configuration.setAllowCredentials(true);
+            configuration.setExposedHeaders(Arrays.asList("Authorization"));
             return configuration;
         }));
 
-        // Configuración general de seguridad
         return http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/users/login", "/api/v1/users/forgot-password").permitAll()
-                        .requestMatchers("/api/v1/users/me").authenticated()
-                        .requestMatchers("/swagger-ui.html", "/v3/api-docs/*", "/swagger-ui/*").permitAll()
-                        .anyRequest().authenticated() // Protege todas las demás rutas
+                        // Rutas públicas de autenticación
+                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/validate").permitAll()
+
+                        // Registro solo para admins autenticados
+                        .requestMatchers("/api/v1/auth/register").hasRole("ADMIN")
+
+                        // Rutas de documentación (Swagger)
+                        .requestMatchers("/swagger-ui.html", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**").permitAll()
+
+                        // Rutas específicas por rol
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/personal/**").hasAnyRole("ADMIN", "PERSONAL")
+
+                        // Rutas del dashboard - accesibles para usuarios autenticados
+                        .requestMatchers("/dashboard/**").hasAnyRole("ADMIN", "PERSONAL")
+
+                        // Rutas de módulos - accesibles según permisos
+                        .requestMatchers("/api/bienes/**").hasAnyRole("ADMIN", "PERSONAL")
+                        .requestMatchers("/api/centros/**").hasAnyRole("ADMIN", "PERSONAL")
+                        .requestMatchers("/api/ubicaciones/**").hasAnyRole("ADMIN", "PERSONAL")
+                        .requestMatchers("/inventario/**").hasAnyRole("ADMIN", "PERSONAL")
+                        .requestMatchers("/api/ubigeo/**").hasAnyRole("ADMIN", "PERSONAL")
+
+                        // Solo admins pueden gestionar personal (crear, modificar, eliminar)
+                        .requestMatchers("/api/personal").hasAnyRole("ADMIN", "PERSONAL") // GET - listar
+                        .requestMatchers("/api/personal/**").hasRole("ADMIN") // POST, PUT, DELETE
+
+                        // Todas las demás rutas requieren autenticación
+                        .anyRequest().authenticated()
                 )
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Sin estado
-                .authenticationProvider(authProvider) // Proveedor de autenticación
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class) // Filtro JWT
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authenticationProvider(authProvider)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }

@@ -1,5 +1,6 @@
 package com.inven.sistemainventariobackend.security;
 
+import com.inven.sistemainventariobackend.security.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +20,7 @@ import java.util.Collections;
 @RequiredArgsConstructor
 public class ApplicationConfig {
 
-    private final UserRepository userRepository;
+    private final UsuarioRepository usuarioRepository;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -28,7 +29,7 @@ public class ApplicationConfig {
 
     @Bean
     public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authenticationProvider= new DaoAuthenticationProvider();
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
         authenticationProvider.setUserDetailsService(userDetailService());
         authenticationProvider.setPasswordEncoder(passwordEncoder());
         return authenticationProvider;
@@ -42,17 +43,17 @@ public class ApplicationConfig {
     @Bean
     public UserDetailsService userDetailService() {
         return username -> {
-            com.plenamente.sgt.domain.entity.User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
+            var usuario = usuarioRepository.findByUsername(username)
+                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado: " + username));
 
             return new org.springframework.security.core.userdetails.User(
-                    user.getUsername(),
-                    user.getPassword(),
-                    user.isEnabled(),
-                    true,
-                    true,
-                    true,
-                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRol().name()))
+                    usuario.getUsername(),
+                    usuario.getPassword(),
+                    usuario.isEnabled(),
+                    true, // account non expired
+                    true, // credentials non expired
+                    true, // account non locked
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name()))
             );
         };
     }
